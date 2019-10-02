@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.RocksIterator;
 import ru.mail.polis.Record;
 
 import java.io.IOException;
@@ -21,7 +22,9 @@ public final class DAOImpl implements DAO {
     @NotNull
     @Override
     public Iterator<Record> iterator(@NotNull ByteBuffer from) throws IOException {
-        return null;
+        RocksIterator iter = db.newIterator();
+        iter.seek(from.array());
+        return new RecordIterator(iter);
     }
 
     @NotNull
