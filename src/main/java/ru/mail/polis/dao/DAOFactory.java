@@ -17,10 +17,7 @@
 package ru.mail.polis.dao;
 
 import org.jetbrains.annotations.NotNull;
-import org.rocksdb.ComparatorOptions;
-import org.rocksdb.Options;
-import org.rocksdb.RocksDB;
-import org.rocksdb.RocksDBException;
+import org.rocksdb.*;
 import org.rocksdb.util.BytewiseComparator;
 
 import java.io.File;
@@ -63,7 +60,7 @@ public final class DAOFactory {
         RocksDB.loadLibrary();
         Options options = new Options()
                 .setCreateIfMissing(true)
-                .setComparator(new BytewiseComparator(new ComparatorOptions()));
+                .setComparator(BuiltinComparator.BYTEWISE_COMPARATOR);
         try {
             RocksDB db = RocksDB.open(options, data.getPath());
             return new DAOImpl(db);

@@ -26,8 +26,9 @@ public class RecordIterator implements Iterator<Record>, Closeable {
             throw new IllegalStateException("iterator is not valid");
         }
         byte[] key = rocksIterator.key();
+        ByteBuffer unpackedKey = ByteArrayUtils.unpackingKey(key);
         byte[] value = rocksIterator.value();
-        Record record = Record.of(ByteBuffer.wrap(key), ByteBuffer.wrap(value));
+        Record record = Record.of(unpackedKey, ByteBuffer.wrap(value));
         rocksIterator.next();
         return record;
     }

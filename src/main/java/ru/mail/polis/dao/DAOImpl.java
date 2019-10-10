@@ -23,7 +23,8 @@ public final class DAOImpl implements DAO {
     @Override
     public Iterator<Record> iterator(@NotNull ByteBuffer from) throws IOException {
         RocksIterator iter = db.newIterator();
-        iter.seek(from.array());
+        byte[] packedKey = ByteArrayUtils.packingKey(from);
+        iter.seek(packedKey);
         return new RecordIterator(iter);
     }
 
@@ -31,7 +32,8 @@ public final class DAOImpl implements DAO {
     @Override
     public ByteBuffer get(@NotNull ByteBuffer key) throws IOException, NoSuchElementException {
         try {
-            byte[] resOfGet = db.get(key.array());
+            byte[] packedKey = ByteArrayUtils.packingKey(key);
+            byte[] resOfGet = db.get(packedKey);
             if (resOfGet == null) {
                 throw new NoSuchElementException("get returned null");
             }
@@ -44,7 +46,9 @@ public final class DAOImpl implements DAO {
     @Override
     public void upsert(@NotNull ByteBuffer key, @NotNull ByteBuffer value) throws IOException {
         try {
-            db.put(key.array(), value.array());
+            byte[] packedKey = ByteArrayUtils.packingKey(key);
+            final byte[] arrayValue = ByteArrayUtils.getArrayFromByteBuffer(value);
+            db.put(packedKey, arrayValue);
         } catch (RocksDBException e) {
             throw new IOException("could not put", e);
         }
@@ -53,7 +57,8 @@ public final class DAOImpl implements DAO {
     @Override
     public void remove(@NotNull ByteBuffer key) throws IOException {
         try {
-            db.delete(key.array());
+            byte[] packedKey = ByteArrayUtils.packingKey(key);
+            db.delete(packedKey);
         } catch (RocksDBException e) {
             throw new IOException("could not delete", e);
         }

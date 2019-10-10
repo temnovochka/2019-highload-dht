@@ -4,6 +4,7 @@ import com.google.common.base.Charsets;
 import one.nio.http.*;
 import one.nio.server.AcceptorConfig;
 import org.jetbrains.annotations.NotNull;
+import ru.mail.polis.dao.ByteArrayUtils;
 import ru.mail.polis.dao.DAO;
 import ru.mail.polis.service.Service;
 
@@ -34,7 +35,8 @@ public class ServiceImpl extends HttpServer implements Service {
             case Request.METHOD_GET:
                 try {
                     ByteBuffer resOfGet = dao.get(id);
-                    return Response.ok(resOfGet.duplicate().array());
+                    final byte[] res = ByteArrayUtils.getArrayFromByteBuffer(resOfGet);
+                    return Response.ok(res);
                 } catch (NoSuchElementException e) {
                     return new Response(Response.NOT_FOUND, Response.EMPTY);
                 }
