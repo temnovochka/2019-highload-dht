@@ -1,7 +1,13 @@
 package ru.mail.polis.service.temnovochka;
 
 import com.google.common.base.Charsets;
-import one.nio.http.*;
+import one.nio.http.HttpServer;
+import one.nio.http.HttpServerConfig;
+import one.nio.http.HttpSession;
+import one.nio.http.Param;
+import one.nio.http.Path;
+import one.nio.http.Request;
+import one.nio.http.Response;
 import one.nio.server.AcceptorConfig;
 import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.dao.ByteArrayUtils;
@@ -23,10 +29,11 @@ public class ServiceImpl extends HttpServer implements Service {
 
     /**
      * Get config for server by port.
+     *
      * @param port to accept HTTP connections
      * @return config
      */
-    private static HttpServerConfig getConfig (final int port) {
+    private static HttpServerConfig getConfig(final int port) {
         final AcceptorConfig acceptor = new AcceptorConfig();
         acceptor.port = port;
         final HttpServerConfig config = new HttpServerConfig();
@@ -35,7 +42,7 @@ public class ServiceImpl extends HttpServer implements Service {
 
     }
 
-    private Response ResponseProcessEntity(final ByteBuffer id, final Request request) throws IOException {
+    private Response responseProcessEntity(final ByteBuffer id, final Request request) throws IOException {
         switch (request.getMethod()) {
             case Request.METHOD_GET:
                 try {
@@ -58,7 +65,8 @@ public class ServiceImpl extends HttpServer implements Service {
 
     /**
      * Serve requests for entities.
-     * @param id of entity
+     *
+     * @param id      of entity
      * @param request - HTTP request
      * @return HTTP response
      */
@@ -69,7 +77,7 @@ public class ServiceImpl extends HttpServer implements Service {
         }
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         try {
-            return ResponseProcessEntity(key, request);
+            return responseProcessEntity(key, request);
         } catch (IOException e) {
             return new Response(Response.INTERNAL_ERROR, Response.EMPTY);
         }
@@ -77,6 +85,7 @@ public class ServiceImpl extends HttpServer implements Service {
 
     /**
      * Serve requests for status.
+     *
      * @param request - HTTP request
      * @return status
      */

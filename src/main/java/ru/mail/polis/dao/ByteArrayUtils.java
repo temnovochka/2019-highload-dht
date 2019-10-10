@@ -6,14 +6,17 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public final class ByteArrayUtils {
-    private ByteArrayUtils() {};
+    private ByteArrayUtils() {
+    }
+
 
     /**
      * Make byte[] from ByteBuffer.
+     *
      * @param buffer - ByteBuffer to make array from
      * @return byte[] from buffer
      */
-    public static byte[] getArrayFromByteBuffer(@NotNull final ByteBuffer buffer){
+    public static byte[] getArrayFromByteBuffer(@NotNull final ByteBuffer buffer) {
         final ByteBuffer copy = buffer.duplicate();
         final byte[] array = new byte[copy.remaining()];
         copy.get(array);
@@ -22,6 +25,7 @@ public final class ByteArrayUtils {
 
     /**
      * Take array from ByteBuffer, move it on Byte.MIN_VALUE up.
+     *
      * @param key - ByteBuffer to make moved array from
      * @return moved on Byte.MIN_VALUE up byte[]
      */
@@ -35,6 +39,7 @@ public final class ByteArrayUtils {
 
     /**
      * Move array on Byte.MIN_VALUE back.
+     *
      * @param key - array to move
      * @return moved ByteBuffer
      */

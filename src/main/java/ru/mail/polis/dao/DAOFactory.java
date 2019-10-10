@@ -17,13 +17,13 @@
 package ru.mail.polis.dao;
 
 import org.jetbrains.annotations.NotNull;
-import org.rocksdb.*;
-import org.rocksdb.util.BytewiseComparator;
+import org.rocksdb.BuiltinComparator;
+import org.rocksdb.Options;
+import org.rocksdb.RocksDB;
+import org.rocksdb.RocksDBException;
 
 import java.io.File;
 import java.io.IOException;
-
-import org.jetbrains.annotations.NotNull;
 
 /**
  * Custom {@link DAO} factory.
