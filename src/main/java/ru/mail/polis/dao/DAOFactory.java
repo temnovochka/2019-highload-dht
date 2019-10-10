@@ -58,11 +58,11 @@ public final class DAOFactory {
         }
 
         RocksDB.loadLibrary();
-        Options options = new Options()
+        final Options options = new Options()
                 .setCreateIfMissing(true)
                 .setComparator(BuiltinComparator.BYTEWISE_COMPARATOR);
         try {
-            RocksDB db = RocksDB.open(options, data.getPath());
+            final RocksDB db = RocksDB.open(options, data.getPath());
             return new DAOImpl(db);
         } catch (RocksDBException e) {
             throw new IOException("could not open db", e);

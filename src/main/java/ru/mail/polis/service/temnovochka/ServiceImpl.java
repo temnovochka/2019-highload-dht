@@ -21,10 +21,15 @@ public class ServiceImpl extends HttpServer implements Service {
         this.dao = dao;
     }
 
+    /**
+     * Get config for server by port.
+     * @param port to accept HTTP connections
+     * @return config
+     */
     private static HttpServerConfig getConfig (final int port) {
-        AcceptorConfig acceptor = new AcceptorConfig();
+        final AcceptorConfig acceptor = new AcceptorConfig();
         acceptor.port = port;
-        HttpServerConfig config = new HttpServerConfig();
+        final HttpServerConfig config = new HttpServerConfig();
         config.acceptors = new AcceptorConfig[]{acceptor};
         return config;
 
@@ -34,7 +39,7 @@ public class ServiceImpl extends HttpServer implements Service {
         switch (request.getMethod()) {
             case Request.METHOD_GET:
                 try {
-                    ByteBuffer resOfGet = dao.get(id);
+                    final ByteBuffer resOfGet = dao.get(id);
                     final byte[] res = ByteArrayUtils.getArrayFromByteBuffer(resOfGet);
                     return Response.ok(res);
                 } catch (NoSuchElementException e) {
@@ -51,12 +56,18 @@ public class ServiceImpl extends HttpServer implements Service {
         }
     }
 
+    /**
+     * Serve requests for entities.
+     * @param id of entity
+     * @param request - HTTP request
+     * @return HTTP response
+     */
     @Path("/v0/entity")
-    public Response entity(@Param("id") final String id, final Request request) throws IOException {
+    public Response entity(@Param("id") final String id, final Request request) {
         if (id == null || id.isEmpty()) {
             return new Response(Response.BAD_REQUEST, Response.EMPTY);
         }
-        ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+        final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         try {
             return ResponseProcessEntity(key, request);
         } catch (IOException e) {
@@ -64,6 +75,11 @@ public class ServiceImpl extends HttpServer implements Service {
         }
     }
 
+    /**
+     * Serve requests for status.
+     * @param request - HTTP request
+     * @return status
+     */
     @Path("/v0/status")
     public Response status(final Request request) {
         if (request.getMethod() == Request.METHOD_GET) {
@@ -74,8 +90,8 @@ public class ServiceImpl extends HttpServer implements Service {
     }
 
     @Override
-    public void handleDefault(Request request, HttpSession session) throws IOException {
-        Response response = new Response(Response.BAD_REQUEST, Response.EMPTY);
+    public void handleDefault(final Request request, final HttpSession session) throws IOException {
+        final Response response = new Response(Response.BAD_REQUEST, Response.EMPTY);
         session.sendResponse(response);
     }
 }

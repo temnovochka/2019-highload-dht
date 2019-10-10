@@ -11,7 +11,7 @@ import java.util.Iterator;
 public class RecordIterator implements Iterator<Record>, Closeable {
     private final RocksIterator rocksIterator;
 
-    public RecordIterator(RocksIterator rocksIterator) {
+    public RecordIterator(final RocksIterator rocksIterator) {
         this.rocksIterator = rocksIterator;
     }
 
@@ -25,10 +25,10 @@ public class RecordIterator implements Iterator<Record>, Closeable {
         if (!rocksIterator.isValid()) {
             throw new IllegalStateException("iterator is not valid");
         }
-        byte[] key = rocksIterator.key();
-        ByteBuffer unpackedKey = ByteArrayUtils.unpackingKey(key);
-        byte[] value = rocksIterator.value();
-        Record record = Record.of(unpackedKey, ByteBuffer.wrap(value));
+        final byte[] key = rocksIterator.key();
+        final ByteBuffer unpackedKey = ByteArrayUtils.unpackingKey(key);
+        final byte[] value = rocksIterator.value();
+        final Record record = Record.of(unpackedKey, ByteBuffer.wrap(value));
         rocksIterator.next();
         return record;
     }

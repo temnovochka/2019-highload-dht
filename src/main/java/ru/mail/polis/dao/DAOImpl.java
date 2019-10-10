@@ -15,25 +15,25 @@ import java.util.NoSuchElementException;
 public final class DAOImpl implements DAO {
     private final RocksDB db;
 
-    public DAOImpl(RocksDB db) {
+    public DAOImpl(final RocksDB db) {
         this.db = db;
     }
 
     @NotNull
     @Override
-    public Iterator<Record> iterator(@NotNull ByteBuffer from) throws IOException {
-        RocksIterator iter = db.newIterator();
-        byte[] packedKey = ByteArrayUtils.packingKey(from);
+    public Iterator<Record> iterator(@NotNull final ByteBuffer from) throws IOException {
+        final RocksIterator iter = db.newIterator();
+        final byte[] packedKey = ByteArrayUtils.packingKey(from);
         iter.seek(packedKey);
         return new RecordIterator(iter);
     }
 
     @NotNull
     @Override
-    public ByteBuffer get(@NotNull ByteBuffer key) throws IOException, NoSuchElementException {
+    public ByteBuffer get(@NotNull final ByteBuffer key) throws IOException, NoSuchElementException {
         try {
-            byte[] packedKey = ByteArrayUtils.packingKey(key);
-            byte[] resOfGet = db.get(packedKey);
+            final byte[] packedKey = ByteArrayUtils.packingKey(key);
+            final byte[] resOfGet = db.get(packedKey);
             if (resOfGet == null) {
                 throw new NoSuchElementException("get returned null");
             }
@@ -44,9 +44,9 @@ public final class DAOImpl implements DAO {
     }
 
     @Override
-    public void upsert(@NotNull ByteBuffer key, @NotNull ByteBuffer value) throws IOException {
+    public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
         try {
-            byte[] packedKey = ByteArrayUtils.packingKey(key);
+            final byte[] packedKey = ByteArrayUtils.packingKey(key);
             final byte[] arrayValue = ByteArrayUtils.getArrayFromByteBuffer(value);
             db.put(packedKey, arrayValue);
         } catch (RocksDBException e) {
@@ -55,9 +55,9 @@ public final class DAOImpl implements DAO {
     }
 
     @Override
-    public void remove(@NotNull ByteBuffer key) throws IOException {
+    public void remove(@NotNull final ByteBuffer key) throws IOException {
         try {
-            byte[] packedKey = ByteArrayUtils.packingKey(key);
+            final byte[] packedKey = ByteArrayUtils.packingKey(key);
             db.delete(packedKey);
         } catch (RocksDBException e) {
             throw new IOException("could not delete", e);
