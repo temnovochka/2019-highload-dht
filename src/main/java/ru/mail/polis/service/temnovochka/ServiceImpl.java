@@ -39,7 +39,6 @@ public class ServiceImpl extends HttpServer implements Service {
         final HttpServerConfig config = new HttpServerConfig();
         config.acceptors = new AcceptorConfig[]{acceptor};
         return config;
-
     }
 
     private Response responseProcessEntity(final ByteBuffer id, final Request request) throws IOException {

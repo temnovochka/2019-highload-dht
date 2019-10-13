@@ -9,7 +9,6 @@ public final class ByteArrayUtils {
     private ByteArrayUtils() {
     }
 
-
     /**
      * Make byte[] from ByteBuffer.
      *
