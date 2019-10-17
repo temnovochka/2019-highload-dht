@@ -9,6 +9,9 @@ import one.nio.http.Path;
 import one.nio.http.Request;
 import one.nio.http.Response;
 import one.nio.server.AcceptorConfig;
+import one.nio.server.Server;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.dao.ByteArrayUtils;
 import ru.mail.polis.dao.DAO;
@@ -19,7 +22,9 @@ import java.nio.ByteBuffer;
 import java.util.NoSuchElementException;
 
 public class ServiceImpl extends HttpServer implements Service {
+    private static final Log log = LogFactory.getLog(Server.class);
 
+    @NotNull
     private final DAO dao;
 
     public ServiceImpl(final int port, @NotNull final DAO dao) throws IOException {
@@ -38,6 +43,8 @@ public class ServiceImpl extends HttpServer implements Service {
         acceptor.port = port;
         final HttpServerConfig config = new HttpServerConfig();
         config.acceptors = new AcceptorConfig[]{acceptor};
+        config.minWorkers = 1;
+        config.maxWorkers = Runtime.getRuntime().availableProcessors();
         return config;
     }
 
@@ -63,23 +70,34 @@ public class ServiceImpl extends HttpServer implements Service {
     }
 
     /**
-     * Serve requests for entities.
+     * Serve requests for entity.
      *
-     * @param id      of entity
+     * @param id      - key for record
      * @param request - HTTP request
-     * @return HTTP response
+     * @param session - HTTP session
+     * @throws IOException when something went wrong with socket
      */
     @Path("/v0/entity")
-    public Response entity(@Param("id") final String id, final Request request) {
+    public void entity(@Param("id") final String id,
+                       @NotNull final Request request,
+                       @NotNull final HttpSession session) throws IOException {
         if (id == null || id.isEmpty()) {
-            return new Response(Response.BAD_REQUEST, Response.EMPTY);
+            session.sendError(Response.BAD_REQUEST, "No id");
+            return;
         }
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
-        try {
-            return responseProcessEntity(key, request);
-        } catch (IOException e) {
-            return new Response(Response.INTERNAL_ERROR, Response.EMPTY);
-        }
+        asyncExecute(() -> {
+            try {
+                final Response response = responseProcessEntity(key, request);
+                session.sendResponse(response);
+            } catch (IOException e) {
+                try {
+                    session.sendError(Response.INTERNAL_ERROR, e.getMessage());
+                } catch (IOException ex) {
+                    log.error("Something went wrong...", ex);
+                }
+            }
+        });
     }
 
     /**

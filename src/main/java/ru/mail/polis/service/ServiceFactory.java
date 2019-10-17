@@ -38,8 +38,8 @@ public final class ServiceFactory {
     /**
      * Construct a storage instance.
      *
-     * @param port     port to bind HTTP server to
-     * @param dao      DAO to store the data
+     * @param port port to bind HTTP server to
+     * @param dao  DAO to store the data
      * @return a storage instance
      */
     @NotNull
