@@ -8,17 +8,21 @@ import one.nio.http.Param;
 import one.nio.http.Path;
 import one.nio.http.Request;
 import one.nio.http.Response;
+import one.nio.net.Socket;
 import one.nio.server.AcceptorConfig;
+import one.nio.server.RejectedSessionException;
 import one.nio.server.Server;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jetbrains.annotations.NotNull;
+import ru.mail.polis.Record;
 import ru.mail.polis.dao.ByteArrayUtils;
 import ru.mail.polis.dao.DAO;
 import ru.mail.polis.service.Service;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 public class ServiceImpl extends HttpServer implements Service {
@@ -90,6 +94,54 @@ public class ServiceImpl extends HttpServer implements Service {
             try {
                 final Response response = responseProcessEntity(key, request);
                 session.sendResponse(response);
+            } catch (IOException e) {
+                try {
+                    session.sendError(Response.INTERNAL_ERROR, e.getMessage());
+                } catch (IOException ex) {
+                    log.error("Something went wrong...", ex);
+                }
+            }
+        });
+    }
+
+    @Override
+    public HttpSession createSession(final Socket socket) throws RejectedSessionException {
+        return new StorageSession(socket, this);
+    }
+
+    /**
+     * Serve requests for entities from start to end.
+     *
+     * @param start   - key for record from which we start giving data
+     * @param end     - key for record on which we stop giving data
+     * @param request - HTTP request
+     * @param session - HTTP session
+     * @throws IOException when something went wrong with socket
+     */
+    @Path("/v0/entities")
+    public void entities(@Param("start") final String start,
+                         @Param("end") final String end,
+                         @NotNull final Request request,
+                         @NotNull final HttpSession session) throws IOException {
+        if (start == null || start.isEmpty()) {
+            session.sendError(Response.BAD_REQUEST, "No id");
+            return;
+        }
+        if (request.getMethod() != Request.METHOD_GET) {
+            session.sendError(Response.METHOD_NOT_ALLOWED, "Allowed only method GET");
+            return;
+        }
+        asyncExecute(() -> {
+            try {
+                final ByteBuffer from = ByteBuffer.wrap(start.getBytes(Charsets.UTF_8));
+                ByteBuffer to = null;
+                if (end != null && !end.isEmpty()) {
+                    to = ByteBuffer.wrap(end.getBytes(Charsets.UTF_8));
+                }
+                final Iterator<Record> iter = dao.range(from, to);
+
+                final StorageSession storageSession = (StorageSession) session;
+                storageSession.stream(iter);
             } catch (IOException e) {
                 try {
                     session.sendError(Response.INTERNAL_ERROR, e.getMessage());
