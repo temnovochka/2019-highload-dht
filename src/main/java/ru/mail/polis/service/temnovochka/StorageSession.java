@@ -19,6 +19,12 @@ public class StorageSession extends HttpSession {
         super(socket, server);
     }
 
+    /**
+     * Give data from iterator by chunks.
+     *
+     * @param iter - iterator by data
+     * @throws IOException when something went wrong with network
+     */
     public void stream(final Iterator<Record> iter) throws IOException {
         this.iter = iter;
 
