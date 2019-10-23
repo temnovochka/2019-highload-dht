@@ -1,14 +1,9 @@
 package ru.mail.polis.service.temnovochka;
 
 import com.google.common.base.Charsets;
-import one.nio.http.HttpServer;
-import one.nio.http.HttpServerConfig;
-import one.nio.http.HttpSession;
-import one.nio.http.Param;
-import one.nio.http.Path;
-import one.nio.http.Request;
-import one.nio.http.Response;
+import one.nio.http.*;
 import one.nio.net.Socket;
+import one.nio.pool.PoolException;
 import one.nio.server.AcceptorConfig;
 import one.nio.server.RejectedSessionException;
 import one.nio.server.Server;
@@ -30,10 +25,13 @@ public class ServiceImpl extends HttpServer implements Service {
 
     @NotNull
     private final DAO dao;
+    @NotNull
+    private final LoadRouter loadRouter;
 
-    public ServiceImpl(final int port, @NotNull final DAO dao) throws IOException {
+    public ServiceImpl(final int port, @NotNull final DAO dao, @NotNull final LoadRouter loadRouter) throws IOException {
         super(getConfig(port));
         this.dao = dao;
+        this.loadRouter = loadRouter;
     }
 
     /**
@@ -90,9 +88,15 @@ public class ServiceImpl extends HttpServer implements Service {
             return;
         }
         final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+        final LoadRouter.Node node = loadRouter.selectNodeForKey(key);
         asyncExecute(() -> {
             try {
-                final Response response = responseProcessEntity(key, request);
+                Response response;
+                if (node.isMe()) {
+                    response = responseProcessEntity(key, request);
+                } else {
+                    response = proxy(node.getClient(), request);
+                }
                 session.sendResponse(response);
             } catch (IOException e) {
                 try {
@@ -102,6 +106,14 @@ public class ServiceImpl extends HttpServer implements Service {
                 }
             }
         });
+    }
+
+    private Response proxy(@NotNull final HttpClient client, @NotNull final Request request) throws IOException {
+        try {
+            return client.invoke(request);
+        } catch (InterruptedException | PoolException | HttpException e) {
+            throw new IOException("Proxy went wrong", e);
+        }
     }
 
     @Override
