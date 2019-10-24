@@ -27,14 +27,11 @@ public class LoadRouter {
      */
     static class Node {
 
-        @NotNull
-        private final String endpoint;
         private final boolean isMe;
         @Nullable
         private final HttpClient client;
 
-        Node(@NotNull final String endpoint, final boolean isMe, @Nullable final HttpClient client) {
-            this.endpoint = endpoint;
+        Node(final boolean isMe, @Nullable final HttpClient client) {
             this.isMe = isMe;
             this.client = client;
         }
@@ -62,7 +59,7 @@ public class LoadRouter {
             final boolean isCurrent = name.equals(currentNodeName);
             final ConnectionString connectionString = new ConnectionString(name + "?timeout=" + 100);
             final HttpClient client = isCurrent ? null : new HttpClient(connectionString);
-            return new Node(name, isCurrent, client);
+            return new Node(isCurrent, client);
         }).collect(Collectors.toList());
 
         final int nodesSize = nodes.size();
