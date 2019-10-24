@@ -13,12 +13,18 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Class for divide data optimal in nodes.
+ */
 public class LoadRouter {
 
     private static final int PART_COUNT = 1 << 10;
     private static final int PART_SIZE = 1 << (Integer.SIZE - 10);
     private final TreeRangeMap<Integer, Node> nodeMap;
 
+    /**
+     * Class represents cluster node.
+     */
     static class Node {
 
         @NotNull
@@ -37,10 +43,6 @@ public class LoadRouter {
             return this.isMe;
         }
 
-        public String getEndpoint() {
-            return this.endpoint;
-        }
-
         public HttpClient getClient() {
             if (this.isMe) {
                 throw new IllegalStateException("Could not take client for current node");
@@ -49,6 +51,12 @@ public class LoadRouter {
         }
     }
 
+    /**
+     * Divide keys into nodes.
+     *
+     * @param topology        - cluster nodes
+     * @param currentNodeName - node, where the request come
+     */
     public LoadRouter(@NotNull final Set<String> topology, @NotNull final String currentNodeName) {
         final List<Node> nodes = topology.stream().sorted().map(name -> {
             final boolean isCurrent = name.equals(currentNodeName);
@@ -71,6 +79,12 @@ public class LoadRouter {
         this.nodeMap.put(range, node);
     }
 
+    /**
+     * Give needed node for key.
+     *
+     * @param key of data
+     * @return node, where data for asked key is
+     */
     public Node selectNodeForKey(@NotNull final ByteBuffer key) {
         final int keyHash = Hashing.sha256().hashBytes(key.duplicate()).asInt();
         return this.nodeMap.get(keyHash);
