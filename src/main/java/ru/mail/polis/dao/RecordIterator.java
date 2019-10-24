@@ -33,7 +33,6 @@ public class RecordIterator implements Iterator<Record>, Closeable {
         return record;
     }
 
-
     @Override
     public void close() throws IOException {
         rocksIterator.close();
