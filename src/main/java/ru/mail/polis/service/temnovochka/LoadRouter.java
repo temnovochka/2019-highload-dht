@@ -1,5 +1,6 @@
 package ru.mail.polis.service.temnovochka;
 
+import com.google.common.collect.Iterators;
 import com.google.common.collect.Range;
 import com.google.common.collect.TreeRangeMap;
 import com.google.common.hash.Hashing;
@@ -9,7 +10,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -21,6 +25,7 @@ public class LoadRouter {
     private static final int PART_COUNT = 1 << 10;
     private static final int PART_SIZE = 1 << (Integer.SIZE - 10);
     private final TreeRangeMap<Integer, Node> nodeMap;
+    private final List<Node> nodes;
 
     /**
      * Class represents cluster node.
@@ -30,10 +35,28 @@ public class LoadRouter {
         private final boolean isMe;
         @Nullable
         private final HttpClient client;
+        @NotNull
+        private final String name;
 
-        Node(final boolean isMe, @Nullable final HttpClient client) {
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Node)) return false;
+            Node node = (Node) o;
+            return isMe == node.isMe &&
+                    Objects.equals(client, node.client) &&
+                    name.equals(node.name);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(isMe, client, name);
+        }
+
+        Node(final boolean isMe, @Nullable final HttpClient client, @NotNull final String name) {
             this.isMe = isMe;
             this.client = client;
+            this.name = name;
         }
 
         public boolean isMe() {
@@ -55,11 +78,11 @@ public class LoadRouter {
      * @param currentNodeName - node, where the request come
      */
     public LoadRouter(@NotNull final Set<String> topology, @NotNull final String currentNodeName) {
-        final List<Node> nodes = topology.stream().sorted().map(name -> {
+        this.nodes = topology.stream().sorted().map(name -> {
             final boolean isCurrent = name.equals(currentNodeName);
             final ConnectionString connectionString = new ConnectionString(name + "?timeout=" + 100);
             final HttpClient client = isCurrent ? null : new HttpClient(connectionString);
-            return new Node(isCurrent, client);
+            return new Node(isCurrent, client, name);
         }).collect(Collectors.toList());
 
         final int nodesSize = nodes.size();
@@ -79,11 +102,29 @@ public class LoadRouter {
     /**
      * Give needed node for key.
      *
-     * @param key of data
-     * @return node, where data for asked key is
+     * @param key        of data
+     * @param numOfNodes number of needed nodes to return
+     * @return list of nodes, where data for asked key is
      */
-    public Node selectNodeForKey(@NotNull final ByteBuffer key) {
+    public List<Node> selectNodeForKey(@NotNull final ByteBuffer key, final int numOfNodes) {
         final int keyHash = Hashing.sha256().hashBytes(key.duplicate()).asInt();
-        return this.nodeMap.get(keyHash);
+        final Node node = this.nodeMap.get(keyHash);
+        final List<Node> resultNodes = new ArrayList<>(numOfNodes);
+        resultNodes.add(node);
+        final Iterator<Node> iterator = Iterators.cycle(nodes);
+        while (!iterator.next().equals(node)) ;
+        for (int i = 1; i < numOfNodes; i++) {
+            resultNodes.add(iterator.next());
+        }
+        return resultNodes;
+    }
+
+    /**
+     * Getting number of nodes in service.
+     *
+     * @return number of nodes
+     */
+    public int getNumOfNodes() {
+        return this.nodes.size();
     }
 }

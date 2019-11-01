@@ -64,4 +64,13 @@ public class DAORecord {
         }
         return value;
     }
+
+    /**
+     * Get timestamp of the DAORecord.
+     *
+     * @return timestamp in milliseconds
+     */
+    public long getTimestamp() {
+        return timestamp;
+    }
 }
