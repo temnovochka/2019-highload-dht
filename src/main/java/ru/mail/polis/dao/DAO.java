@@ -103,4 +103,24 @@ public interface DAO extends Closeable {
     default void compact() throws IOException {
         // Implement me when you get to stage 3
     }
+
+    /**
+     * Method for getting DAORecord by key.
+     *
+     * @param key for getting DAORecord
+     * @return DAORecord from db
+     * @throws IOException            when something went wrong
+     * @throws NoSuchElementException when we have no record in db by given key
+     */
+    @NotNull
+    DAORecord getRecord(@NotNull final ByteBuffer key) throws IOException, NoSuchElementException;
+
+    /**
+     * Inserts or updates value by given key.
+     *
+     * @param key   for upserting record
+     * @param value for record
+     * @throws IOException when something went wrong
+     */
+    void upsertRecord(@NotNull final ByteBuffer key, @NotNull final DAORecord value) throws IOException;
 }

@@ -17,19 +17,34 @@ public class RecordIterator implements Iterator<Record>, Closeable {
 
     @Override
     public boolean hasNext() {
+        skip();
         return rocksIterator.isValid();
+    }
+
+    private void skip() {
+        while (this.rocksIterator.isValid()) {
+            final byte[] value = this.rocksIterator.value();
+            final DAORecord daoRecord = DAORecord.fromBytes(value);
+            if (!daoRecord.isDeleted()) {
+                break;
+            }
+            this.rocksIterator.next();
+        }
     }
 
     @Override
     public Record next() {
+        skip();
         if (!rocksIterator.isValid()) {
             throw new IllegalStateException("iterator is not valid");
         }
         final byte[] key = rocksIterator.key();
         final ByteBuffer unpackedKey = ByteArrayUtils.unpackingKey(key);
         final byte[] value = rocksIterator.value();
-        final Record record = Record.of(unpackedKey, ByteBuffer.wrap(value));
+        final DAORecord daoRecord = DAORecord.fromBytes(value);
+        final Record record = Record.of(unpackedKey, daoRecord.getValue());
         rocksIterator.next();
+        skip();
         return record;
     }
 

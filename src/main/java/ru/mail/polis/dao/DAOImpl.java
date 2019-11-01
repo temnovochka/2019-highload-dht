@@ -30,37 +30,21 @@ public final class DAOImpl implements DAO {
     @NotNull
     @Override
     public ByteBuffer get(@NotNull final ByteBuffer key) throws IOException, NoSuchElementException {
-        try {
-            final byte[] packedKey = ByteArrayUtils.packingKey(key);
-            final byte[] resOfGet = db.get(packedKey);
-            if (resOfGet == null) {
-                throw new NoSuchElementException("get returned null");
-            }
-            return ByteBuffer.wrap(resOfGet);
-        } catch (RocksDBException e) {
-            throw new IOException("could not get", e);
+        final DAORecord record = getRecord(key);
+        if (record.isDeleted()) {
+            throw new NoSuchElementException();
         }
+        return record.getValue();
     }
 
     @Override
     public void upsert(@NotNull final ByteBuffer key, @NotNull final ByteBuffer value) throws IOException {
-        try {
-            final byte[] packedKey = ByteArrayUtils.packingKey(key);
-            final byte[] arrayValue = ByteArrayUtils.getArrayFromByteBuffer(value);
-            db.put(packedKey, arrayValue);
-        } catch (RocksDBException e) {
-            throw new IOException("could not put", e);
-        }
+        upsertRecord(key, new DAORecord(value, System.currentTimeMillis(), false));
     }
 
     @Override
     public void remove(@NotNull final ByteBuffer key) throws IOException {
-        try {
-            final byte[] packedKey = ByteArrayUtils.packingKey(key);
-            db.delete(packedKey);
-        } catch (RocksDBException e) {
-            throw new IOException("could not delete", e);
-        }
+        upsertRecord(key, new DAORecord(ByteBuffer.allocate(0), System.currentTimeMillis(), true));
     }
 
     @Override
@@ -69,6 +53,32 @@ public final class DAOImpl implements DAO {
             db.compactRange();
         } catch (RocksDBException e) {
             throw new IOException("could not compact", e);
+        }
+    }
+
+    @NotNull
+    @Override
+    public DAORecord getRecord(@NotNull final ByteBuffer key) throws IOException, NoSuchElementException {
+        try {
+            final byte[] packedKey = ByteArrayUtils.packingKey(key);
+            final byte[] resOfGet = db.get(packedKey);
+            if (resOfGet == null) {
+                throw new NoSuchElementException("get returned null");
+            }
+            return DAORecord.fromBytes(resOfGet);
+        } catch (RocksDBException e) {
+            throw new IOException("could not get", e);
+        }
+    }
+
+    @Override
+    public void upsertRecord(@NotNull final ByteBuffer key, @NotNull final DAORecord value) throws IOException {
+        try {
+            final byte[] packedKey = ByteArrayUtils.packingKey(key);
+            final byte[] arrayValue = value.toBytes();
+            db.put(packedKey, arrayValue);
+        } catch (RocksDBException e) {
+            throw new IOException("could not put", e);
         }
     }
 
