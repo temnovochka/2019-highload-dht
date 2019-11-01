@@ -13,8 +13,20 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class EntityWorker {
+
+    public static final class Replicas {
+        final int ack;
+        final int from;
+
+        Replicas(final int ack, final int from) {
+            this.ack = ack;
+            this.from = from;
+        }
+    }
 
     private EntityWorker() {
     }
@@ -98,5 +110,30 @@ public final class EntityWorker {
             default:
                 return new Response(Response.METHOD_NOT_ALLOWED, Response.EMPTY);
         }
+    }
+
+    /**
+     * Parse replicas from request.
+     *
+     * @param replicas      - given replicas from request
+     * @param numberOfNodes - number of nodes in service
+     * @return parsed replicas
+     */
+    public static Replicas parseReplicas(final String replicas, final int numberOfNodes) {
+        if (replicas == null || replicas.isEmpty()) {
+            final int ack = numberOfNodes / 2 + 1;
+            return new Replicas(ack, numberOfNodes);
+        }
+        final Pattern regex = Pattern.compile("(\\d+)/(\\d+)");
+        final Matcher match = regex.matcher(replicas);
+        if (!match.find()) {
+            return null;
+        }
+        final int ack = Integer.parseInt(match.group(1));
+        final int from = Integer.parseInt(match.group(2));
+        if (from > numberOfNodes || ack <= 0 || ack > from) {
+            return null;
+        }
+        return new Replicas(ack, from);
     }
 }

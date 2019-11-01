@@ -21,14 +21,13 @@ import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.Record;
 import ru.mail.polis.dao.DAO;
 import ru.mail.polis.service.Service;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class ServiceImpl extends HttpServer implements Service {
     private static final Log log = LogFactory.getLog(Server.class);
@@ -120,26 +119,12 @@ public class ServiceImpl extends HttpServer implements Service {
             });
             return;
         }
-        int ack;
-        int from;
-        if (replicas == null || replicas.isEmpty()) {
-            from = loadRouter.getNumOfNodes();
-            ack = from / 2 + 1;
-        } else {
-            final Pattern regex = Pattern.compile("(\\d+)/(\\d+)");
-            final Matcher match = regex.matcher(replicas);
-            if (!match.find()) {
-                session.sendError(Response.BAD_REQUEST, "Format of replicas is not correct");
-                return;
-            }
-            ack = Integer.parseInt(match.group(1));
-            from = Integer.parseInt(match.group(2));
-        }
-        if (from <= 0 || from > loadRouter.getNumOfNodes() || ack <= 0 || ack > from) {
+        final EntityWorker.Replicas parsedReplicas = EntityWorker.parseReplicas(replicas, loadRouter.getNumOfNodes());
+        if (parsedReplicas == null) {
             session.sendError(Response.BAD_REQUEST, "Format of replicas is not correct");
             return;
         }
-        final List<LoadRouter.Node> nodes = loadRouter.selectNodeForKey(key, from);
+        final List<LoadRouter.Node> nodes = loadRouter.selectNodeForKey(key, parsedReplicas.from);
         final long timestamp = System.currentTimeMillis();
         asyncExecute(() -> {
             try {
@@ -152,7 +137,7 @@ public class ServiceImpl extends HttpServer implements Service {
                         proxy(node.getClient(), request).ifPresent(responses::add);
                     }
                 }
-                session.sendResponse(EntityWorker.makeResponse(request, ack, responses));
+                session.sendResponse(EntityWorker.makeResponse(request, parsedReplicas.ack, responses));
             } catch (IOException e) {
                 sendError(session, e.getMessage());
             }
