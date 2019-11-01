@@ -19,17 +19,14 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jetbrains.annotations.NotNull;
 import ru.mail.polis.Record;
-import ru.mail.polis.dao.ByteArrayUtils;
 import ru.mail.polis.dao.DAO;
-import ru.mail.polis.dao.DAORecord;
 import ru.mail.polis.service.Service;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -74,29 +71,6 @@ public class ServiceImpl extends HttpServer implements Service {
         return config;
     }
 
-    private Response responseProcessEntity(final ByteBuffer id,
-                                           final Request request,
-                                           long timestamp) throws IOException {
-        switch (request.getMethod()) {
-            case Request.METHOD_GET:
-                try {
-                    final DAORecord resOfGet = dao.getRecord(id);
-                    return Response.ok(resOfGet.toBytes());
-                } catch (NoSuchElementException e) {
-                    return new Response(Response.NOT_FOUND, Response.EMPTY);
-                }
-            case Request.METHOD_PUT:
-                final ByteBuffer value = ByteBuffer.wrap(request.getBody());
-                dao.upsertRecord(id, new DAORecord(value, timestamp, false));
-                return new Response(Response.CREATED, Response.EMPTY);
-            case Request.METHOD_DELETE:
-                dao.upsertRecord(id, new DAORecord(ByteBuffer.allocate(0), timestamp, true));
-                return new Response(Response.ACCEPTED, Response.EMPTY);
-            default:
-                return new Response(Response.METHOD_NOT_ALLOWED, Response.EMPTY);
-        }
-    }
-
     private Request addHeaders(@NotNull final Request request, final long timestamp) {
         request.addHeader("X-WHO: SYSTEM");
         request.addHeader("X-TIMESTAMP: " + timestamp);
@@ -138,14 +112,10 @@ public class ServiceImpl extends HttpServer implements Service {
             final long timestamp = getTimestamp(request);
             asyncExecute(() -> {
                 try {
-                    final Response response = responseProcessEntity(key, request, timestamp);
+                    final Response response = EntityWorker.responseProcessEntity(dao, key, request, timestamp);
                     session.sendResponse(response);
                 } catch (IOException e) {
-                    try {
-                        session.sendError(Response.INTERNAL_ERROR, e.getMessage());
-                    } catch (IOException ex) {
-                        log.error("Something went wrong...", ex);
-                    }
+                    sendError(session, e.getMessage());
                 }
             });
             return;
@@ -175,88 +145,34 @@ public class ServiceImpl extends HttpServer implements Service {
             try {
                 addHeaders(request, timestamp);
                 final List<Response> responses = new ArrayList<>();
-                for (LoadRouter.Node node : nodes) {
+                for (final LoadRouter.Node node : nodes) {
                     if (node.isMe()) {
-                        responses.add(responseProcessEntity(key, request, timestamp));
+                        responses.add(EntityWorker.responseProcessEntity(dao, key, request, timestamp));
                     } else {
-                        try {
-                            responses.add(proxy(node.getClient(), request));
-                        } catch (IOException e) {
-                            log.error("Proxy went wrong", e);
-                        }
+                        proxy(node.getClient(), request).ifPresent(responses::add);
                     }
                 }
-                switch (request.getMethod()) {
-                    /*404, 200 - deleted / not deleted*/
-                    case Request.METHOD_GET: {
-                        final long successResponses = responses.stream()
-                                .map(Response::getStatus)
-                                .filter(it -> it.equals(200) || it.equals(404))
-                                .count();
-                        if (successResponses >= ack) {
-                            DAORecord newestRecord = null;
-                            for (Response response : responses) {
-                                if (response.getStatus() != 200)
-                                    continue;
-                                final DAORecord record = DAORecord.fromBytes(response.getBody());
-                                if (newestRecord == null || record.getTimestamp() > newestRecord.getTimestamp()) {
-                                    newestRecord = record;
-                                }
-                            }
-                            if (newestRecord == null || newestRecord.isDeleted()) {
-                                session.sendResponse(new Response(Response.NOT_FOUND, Response.EMPTY));
-                            } else {
-                                final byte[] value = ByteArrayUtils.getArrayFromByteBuffer(newestRecord.getValue());
-                                session.sendResponse(Response.ok(value));
-                            }
-                        } else {
-                            session.sendResponse(new Response("504 Not Enough Replicas", Response.EMPTY));
-                        }
-                        break;
-                    }
-                    case Request.METHOD_PUT: {
-                        final long successResponses = responses.stream()
-                                .map(Response::getStatus)
-                                .filter(it -> it.equals(201))
-                                .count();
-                        if (successResponses >= ack) {
-                            session.sendResponse(new Response(Response.CREATED, Response.EMPTY));
-                        } else {
-                            session.sendResponse(new Response("504 Not Enough Replicas", Response.EMPTY));
-                        }
-                        break;
-                    }
-                    case Request.METHOD_DELETE: {
-                        final long successResponses = responses.stream()
-                                .map(Response::getStatus)
-                                .filter(it -> it.equals(202))
-                                .count();
-                        if (successResponses >= ack) {
-                            session.sendResponse(new Response(Response.ACCEPTED, Response.EMPTY));
-                        } else {
-                            session.sendResponse(new Response("504 Not Enough Replicas", Response.EMPTY));
-                        }
-                        break;
-                    }
-                    default:
-                        session.sendResponse(new Response(Response.METHOD_NOT_ALLOWED, Response.EMPTY));
-                        break;
-                }
+                session.sendResponse(EntityWorker.makeResponse(request, ack, responses));
             } catch (IOException e) {
-                try {
-                    session.sendError(Response.INTERNAL_ERROR, e.getMessage());
-                } catch (IOException ex) {
-                    log.error("Something went wrong...", ex);
-                }
+                sendError(session, e.getMessage());
             }
         });
     }
 
-    private Response proxy(@NotNull final HttpClient client, @NotNull final Request request) throws IOException {
+    private void sendError(@NotNull final HttpSession session, @NotNull final String message) {
         try {
-            return client.invoke(request);
-        } catch (InterruptedException | PoolException | HttpException e) {
-            throw new IOException("Proxy went wrong", e);
+            session.sendError(Response.INTERNAL_ERROR, message);
+        } catch (IOException ex) {
+            log.error("Something went wrong...", ex);
+        }
+    }
+
+    private Optional<Response> proxy(@NotNull final HttpClient client, @NotNull final Request request) {
+        try {
+            return Optional.of(client.invoke(request));
+        } catch (InterruptedException | PoolException | HttpException | IOException e) {
+            log.error("Proxy went wrong", e);
+            return Optional.empty();
         }
     }
 
@@ -299,11 +215,7 @@ public class ServiceImpl extends HttpServer implements Service {
                 final StorageSession storageSession = (StorageSession) session;
                 storageSession.stream(iter);
             } catch (IOException e) {
-                try {
-                    session.sendError(Response.INTERNAL_ERROR, e.getMessage());
-                } catch (IOException ex) {
-                    log.error("Something went wrong...", ex);
-                }
+                sendError(session, e.getMessage());
             }
         });
     }

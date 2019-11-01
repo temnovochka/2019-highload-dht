@@ -26,9 +26,9 @@ public class DAORecord {
      * @return bytes
      */
     public byte[] toBytes() {
-        final char deleted = this.deleted ? 'd' : 'e';
+        final char deletedChar = this.deleted ? 'd' : 'e';
         return ByteBuffer.allocate(Character.BYTES + Long.BYTES + value.remaining())
-                .putChar(deleted).putLong(timestamp).put(value.duplicate()).array();
+                .putChar(deletedChar).putLong(timestamp).put(value.duplicate()).array();
     }
 
     /**

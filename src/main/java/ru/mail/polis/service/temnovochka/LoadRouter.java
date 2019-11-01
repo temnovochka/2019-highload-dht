@@ -1,6 +1,7 @@
 package ru.mail.polis.service.temnovochka;
 
 import com.google.common.collect.Iterators;
+import com.google.common.collect.PeekingIterator;
 import com.google.common.collect.Range;
 import com.google.common.collect.TreeRangeMap;
 import com.google.common.hash.Hashing;
@@ -39,13 +40,11 @@ public class LoadRouter {
         private final String name;
 
         @Override
-        public boolean equals(Object o) {
+        public boolean equals(final Object o) {
             if (this == o) return true;
             if (!(o instanceof Node)) return false;
-            Node node = (Node) o;
-            return isMe == node.isMe &&
-                    Objects.equals(client, node.client) &&
-                    name.equals(node.name);
+            final Node node = (Node) o;
+            return isMe == node.isMe && Objects.equals(client, node.client) && name.equals(node.name);
         }
 
         @Override
@@ -110,10 +109,11 @@ public class LoadRouter {
         final int keyHash = Hashing.sha256().hashBytes(key.duplicate()).asInt();
         final Node node = this.nodeMap.get(keyHash);
         final List<Node> resultNodes = new ArrayList<>(numOfNodes);
-        resultNodes.add(node);
-        final Iterator<Node> iterator = Iterators.cycle(nodes);
-        while (!iterator.next().equals(node)) ;
-        for (int i = 1; i < numOfNodes; i++) {
+        final PeekingIterator<Node> iterator = Iterators.peekingIterator(Iterators.cycle(nodes));
+        while (!iterator.peek().equals(node)) {
+            iterator.next();
+        }
+        for (int i = 0; i < numOfNodes; i++) {
             resultNodes.add(iterator.next());
         }
         return resultNodes;
