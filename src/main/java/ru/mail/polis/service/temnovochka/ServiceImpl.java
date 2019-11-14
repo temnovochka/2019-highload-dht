@@ -1,8 +1,6 @@
 package ru.mail.polis.service.temnovochka;
 
 import com.google.common.base.Charsets;
-import one.nio.http.HttpClient;
-import one.nio.http.HttpException;
 import one.nio.http.HttpServer;
 import one.nio.http.HttpServerConfig;
 import one.nio.http.HttpSession;
@@ -11,7 +9,6 @@ import one.nio.http.Path;
 import one.nio.http.Request;
 import one.nio.http.Response;
 import one.nio.net.Socket;
-import one.nio.pool.PoolException;
 import one.nio.server.AcceptorConfig;
 import one.nio.server.RejectedSessionException;
 import one.nio.server.Server;
@@ -23,11 +20,16 @@ import ru.mail.polis.dao.DAO;
 import ru.mail.polis.service.Service;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 public class ServiceImpl extends HttpServer implements Service {
     private static final Log log = LogFactory.getLog(Server.class);
@@ -36,6 +38,8 @@ public class ServiceImpl extends HttpServer implements Service {
     private final DAO dao;
     @NotNull
     private final LoadRouter loadRouter;
+    @NotNull
+    private final HttpClient client;
 
     /**
      * Constructor for ServiceImpl.
@@ -52,6 +56,7 @@ public class ServiceImpl extends HttpServer implements Service {
         super(getConfig(port));
         this.dao = dao;
         this.loadRouter = loadRouter;
+        this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build();
     }
 
     /**
@@ -127,20 +132,62 @@ public class ServiceImpl extends HttpServer implements Service {
         final List<LoadRouter.Node> nodes = loadRouter.selectNodeForKey(key, parsedReplicas.from);
         final long timestamp = System.currentTimeMillis();
         asyncExecute(() -> {
-            try {
-                addHeaders(request, timestamp);
-                final List<Response> responses = new ArrayList<>();
-                for (final LoadRouter.Node node : nodes) {
-                    if (node.isMe()) {
-                        responses.add(EntityWorker.responseProcessEntity(dao, key, request, timestamp));
-                    } else {
-                        proxy(node.getClient(), request).ifPresent(responses::add);
-                    }
+            addHeaders(request, timestamp);
+            final List<CompletableFuture<ResponseRepresentation>> responses = new ArrayList<>();
+            boolean seenMe = false;
+            for (final LoadRouter.Node node : nodes) {
+                if (node.isMe()) {
+                    seenMe = true;
+                    continue;
                 }
-                session.sendResponse(EntityWorker.makeResponse(request, parsedReplicas.ack, responses));
-            } catch (IOException e) {
-                sendError(session, e.getMessage());
+                HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                        .uri(URI.create(node.getName() + "/v0/entity?id=" + id))
+                        .timeout(Duration.ofMillis(100))
+                        .setHeader("X-WHO", "SYSTEM")
+                        .setHeader("X-TIMESTAMP", Long.toString(timestamp));
+                if (request.getMethod() == Request.METHOD_GET) {
+                    requestBuilder = requestBuilder.GET();
+                } else if (request.getMethod() == Request.METHOD_PUT) {
+                    requestBuilder = requestBuilder.PUT(HttpRequest.BodyPublishers.ofByteArray(request.getBody()));
+                } else if (request.getMethod() == Request.METHOD_DELETE) {
+                    requestBuilder = requestBuilder.DELETE();
+                } else {
+                    throw new IllegalStateException();
+                }
+                final HttpRequest httpRequest = requestBuilder.build();
+                final CompletableFuture<ResponseRepresentation> response =
+                        this.client.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofByteArray())
+                                .thenApply(ResponseRepresentation::create);
+                responses.add(response);
             }
+            if (seenMe) {
+                final CompletableFuture<ResponseRepresentation> response = new CompletableFuture<>();
+                try {
+                    final Response r = EntityWorker.responseProcessEntity(dao, key, request, timestamp);
+                    final ResponseRepresentation representation = ResponseRepresentation.create(r);
+                    response.complete(representation);
+                } catch (IOException e) {
+                    response.completeExceptionally(e);
+                }
+                responses.add(response);
+            }
+            CompletableFutureHelper
+                    .whenComplete(responses, parsedReplicas.ack)
+                    .thenAccept(res -> {
+                        try {
+                            session.sendResponse(EntityWorker.makeResponse(request, parsedReplicas.ack, res));
+                        } catch (IOException e) {
+                            sendError(session, e.getMessage());
+                        }
+                    })
+                    .exceptionally(ex -> {
+                        try {
+                            session.sendResponse(new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY));
+                        } catch (IOException e) {
+                            sendError(session, e.getMessage());
+                        }
+                        return null;
+                    });
         });
     }
 
@@ -149,15 +196,6 @@ public class ServiceImpl extends HttpServer implements Service {
             session.sendError(Response.INTERNAL_ERROR, message);
         } catch (IOException ex) {
             log.error("Something went wrong...", ex);
-        }
-    }
-
-    private Optional<Response> proxy(@NotNull final HttpClient client, @NotNull final Request request) {
-        try {
-            return Optional.of(client.invoke(request));
-        } catch (InterruptedException | PoolException | HttpException | IOException e) {
-            log.error("Proxy went wrong", e);
-            return Optional.empty();
         }
     }
 

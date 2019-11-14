@@ -39,10 +39,12 @@ public final class EntityWorker {
      * @param responses - lias of responses from nodes
      * @return result response for user
      */
-    public static Response makeResponse(@NotNull final Request request, final int ack, final List<Response> responses) {
+    public static Response makeResponse(@NotNull final Request request,
+                                        final int ack,
+                                        final List<ResponseRepresentation> responses) {
         final Set<Integer> codes = ImmutableSet.of(200, 201, 202, 404);
         final long successResponses = responses.stream()
-                .map(Response::getStatus)
+                .map(ResponseRepresentation::getStatus)
                 .filter(codes::contains)
                 .count();
         if (successResponses < ack) {
@@ -51,7 +53,7 @@ public final class EntityWorker {
         switch (request.getMethod()) {
             case Request.METHOD_GET: {
                 DAORecord newestRecord = null;
-                for (final Response response : responses) {
+                for (final ResponseRepresentation response : responses) {
                     if (response.getStatus() != 200) {
                         continue;
                     }

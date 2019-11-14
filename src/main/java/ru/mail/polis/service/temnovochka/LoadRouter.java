@@ -67,6 +67,11 @@ public class LoadRouter {
             }
             return this.client;
         }
+
+        @NotNull
+        public String getName() {
+            return name;
+        }
     }
 
     /**
