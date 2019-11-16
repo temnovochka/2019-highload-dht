@@ -4,14 +4,15 @@ import one.nio.http.Response;
 import org.jetbrains.annotations.NotNull;
 
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 
 public final class ResponseRepresentation {
 
     @NotNull
-    private final byte[] body;
+    private final ByteBuffer body;
     private final int status;
 
-    private ResponseRepresentation(@NotNull final byte[] body, final int status) {
+    private ResponseRepresentation(@NotNull final ByteBuffer body, final int status) {
         this.body = body;
         this.status = status;
     }
@@ -23,7 +24,7 @@ public final class ResponseRepresentation {
      * @return representation
      */
     public static ResponseRepresentation create(final Response response) {
-        return new ResponseRepresentation(response.getBody(), response.getStatus());
+        return new ResponseRepresentation(ByteBuffer.wrap(response.getBody()), response.getStatus());
     }
 
     /**
@@ -33,11 +34,11 @@ public final class ResponseRepresentation {
      * @return representation
      */
     public static ResponseRepresentation create(final HttpResponse<byte[]> response) {
-        return new ResponseRepresentation(response.body(), response.statusCode());
+        return new ResponseRepresentation(ByteBuffer.wrap(response.body()), response.statusCode());
     }
 
     @NotNull
-    public byte[] getBody() {
+    public ByteBuffer getBody() {
         return body;
     }
 

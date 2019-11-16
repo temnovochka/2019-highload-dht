@@ -9,10 +9,16 @@ import ru.mail.polis.dao.DAO;
 import ru.mail.polis.dao.DAORecord;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -137,5 +143,64 @@ public final class EntityWorker {
             return null;
         }
         return new Replicas(ack, from);
+    }
+
+    /**
+     * Proxy entity request to a given node.
+     *
+     * @param id        - id of entity
+     * @param request   - original http request
+     * @param timestamp - timestamp of request
+     * @param node      - given node
+     * @param client    - http client
+     * @return response future
+     */
+    public static CompletableFuture<ResponseRepresentation> proxy(final String id,
+                                                                  @NotNull final Request request,
+                                                                  final long timestamp,
+                                                                  final LoadRouter.Node node,
+                                                                  final HttpClient client) {
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                .uri(URI.create(node.getName() + "/v0/entity?id=" + id))
+                .timeout(Duration.ofMillis(100))
+                .setHeader("X-WHO", "SYSTEM")
+                .setHeader("X-TIMESTAMP", Long.toString(timestamp));
+        if (request.getMethod() == Request.METHOD_GET) {
+            requestBuilder = requestBuilder.GET();
+        } else if (request.getMethod() == Request.METHOD_PUT) {
+            requestBuilder = requestBuilder.PUT(HttpRequest.BodyPublishers.ofByteArray(request.getBody()));
+        } else if (request.getMethod() == Request.METHOD_DELETE) {
+            requestBuilder = requestBuilder.DELETE();
+        } else {
+            throw new IllegalStateException();
+        }
+        final HttpRequest httpRequest = requestBuilder.build();
+        return client.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofByteArray())
+                .thenApply(ResponseRepresentation::create);
+    }
+
+    /**
+     * Process entity request on a local node.
+     *
+     * @param request   - original http request
+     * @param key       - key of entity
+     * @param timestamp - timestamp of request
+     * @param dao       - data access object
+     * @return response future
+     */
+    @NotNull
+    public static CompletableFuture<ResponseRepresentation> processRequestLocally(@NotNull final Request request,
+                                                                                  final ByteBuffer key,
+                                                                                  final long timestamp,
+                                                                                  final DAO dao) {
+        final CompletableFuture<ResponseRepresentation> response = new CompletableFuture<>();
+        try {
+            final Response r = responseProcessEntity(dao, key, request, timestamp);
+            final ResponseRepresentation representation = ResponseRepresentation.create(r);
+            response.complete(representation);
+        } catch (IOException e) {
+            response.completeExceptionally(e);
+        }
+        return response;
     }
 }

@@ -39,6 +39,16 @@ public class DAORecord {
      */
     public static DAORecord fromBytes(final byte[] bytes) {
         final ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        return fromBytes(buffer);
+    }
+
+    /**
+     * Make DAORecord from bytes.
+     *
+     * @param buffer for making DAORecord from
+     * @return constructed DAORecord
+     */
+    public static DAORecord fromBytes(final ByteBuffer buffer) {
         final char symbol = buffer.getChar();
         final long timestamp = buffer.getLong();
         return new DAORecord(buffer, timestamp, symbol == 'd');

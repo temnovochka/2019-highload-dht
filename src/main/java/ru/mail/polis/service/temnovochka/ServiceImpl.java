@@ -20,10 +20,7 @@ import ru.mail.polis.dao.DAO;
 import ru.mail.polis.service.Service;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -73,12 +70,6 @@ public class ServiceImpl extends HttpServer implements Service {
         config.minWorkers = 1;
         config.maxWorkers = Runtime.getRuntime().availableProcessors();
         return config;
-    }
-
-    private Request addHeaders(@NotNull final Request request, final long timestamp) {
-        request.addHeader("X-WHO: SYSTEM");
-        request.addHeader("X-TIMESTAMP: " + timestamp);
-        return request;
     }
 
     private boolean isSystemRequest(@NotNull final Request request) {
@@ -132,7 +123,6 @@ public class ServiceImpl extends HttpServer implements Service {
         final List<LoadRouter.Node> nodes = loadRouter.selectNodeForKey(key, parsedReplicas.from);
         final long timestamp = System.currentTimeMillis();
         asyncExecute(() -> {
-            addHeaders(request, timestamp);
             final List<CompletableFuture<ResponseRepresentation>> responses = new ArrayList<>();
             boolean seenMe = false;
             for (final LoadRouter.Node node : nodes) {
@@ -140,36 +130,10 @@ public class ServiceImpl extends HttpServer implements Service {
                     seenMe = true;
                     continue;
                 }
-                HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
-                        .uri(URI.create(node.getName() + "/v0/entity?id=" + id))
-                        .timeout(Duration.ofMillis(100))
-                        .setHeader("X-WHO", "SYSTEM")
-                        .setHeader("X-TIMESTAMP", Long.toString(timestamp));
-                if (request.getMethod() == Request.METHOD_GET) {
-                    requestBuilder = requestBuilder.GET();
-                } else if (request.getMethod() == Request.METHOD_PUT) {
-                    requestBuilder = requestBuilder.PUT(HttpRequest.BodyPublishers.ofByteArray(request.getBody()));
-                } else if (request.getMethod() == Request.METHOD_DELETE) {
-                    requestBuilder = requestBuilder.DELETE();
-                } else {
-                    throw new IllegalStateException();
-                }
-                final HttpRequest httpRequest = requestBuilder.build();
-                final CompletableFuture<ResponseRepresentation> response =
-                        this.client.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofByteArray())
-                                .thenApply(ResponseRepresentation::create);
-                responses.add(response);
+                responses.add(EntityWorker.proxy(id, request, timestamp, node, client));
             }
             if (seenMe) {
-                final CompletableFuture<ResponseRepresentation> response = new CompletableFuture<>();
-                try {
-                    final Response r = EntityWorker.responseProcessEntity(dao, key, request, timestamp);
-                    final ResponseRepresentation representation = ResponseRepresentation.create(r);
-                    response.complete(representation);
-                } catch (IOException e) {
-                    response.completeExceptionally(e);
-                }
-                responses.add(response);
+                responses.add(EntityWorker.processRequestLocally(request, key, timestamp, dao));
             }
             CompletableFutureHelper
                     .whenComplete(responses, parsedReplicas.ack)
