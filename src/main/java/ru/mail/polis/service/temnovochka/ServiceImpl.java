@@ -102,12 +102,11 @@ public class ServiceImpl extends HttpServer implements Service {
             session.sendError(Response.BAD_REQUEST, "No id");
             return;
         }
-        final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         if (isSystemRequest(request)) {
             final long timestamp = getTimestamp(request);
             asyncExecute(() -> {
                 try {
-                    final Response response = EntityWorker.responseProcessEntity(dao, key, request, timestamp);
+                    final Response response = EntityWorker.responseProcessEntity(dao, id, request, timestamp);
                     session.sendResponse(response);
                 } catch (IOException e) {
                     sendError(session, e.getMessage());
@@ -120,39 +119,48 @@ public class ServiceImpl extends HttpServer implements Service {
             session.sendError(Response.BAD_REQUEST, "Format of replicas is not correct");
             return;
         }
-        final List<LoadRouter.Node> nodes = loadRouter.selectNodeForKey(key, parsedReplicas.from);
         final long timestamp = System.currentTimeMillis();
         asyncExecute(() -> {
-            final List<CompletableFuture<ResponseRepresentation>> responses = new ArrayList<>();
-            boolean seenMe = false;
-            for (final LoadRouter.Node node : nodes) {
-                if (node.isMe()) {
-                    seenMe = true;
-                    continue;
-                }
-                responses.add(EntityWorker.proxy(id, request, timestamp, node, client));
-            }
-            if (seenMe) {
-                responses.add(EntityWorker.processRequestLocally(request, key, timestamp, dao));
-            }
-            CompletableFutureHelper
-                    .whenComplete(responses, parsedReplicas.ack)
-                    .thenAccept(res -> {
-                        try {
-                            session.sendResponse(EntityWorker.makeResponse(request, parsedReplicas.ack, res));
-                        } catch (IOException e) {
-                            sendError(session, e.getMessage());
-                        }
-                    })
-                    .exceptionally(ex -> {
-                        try {
-                            session.sendResponse(new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY));
-                        } catch (IOException e) {
-                            sendError(session, e.getMessage());
-                        }
-                        return null;
-                    });
+            executeEntityRequest(id, request, session, parsedReplicas, timestamp);
         });
+    }
+
+    private void executeEntityRequest(final String id,
+                                      @NotNull final Request request,
+                                      @NotNull final HttpSession session,
+                                      final EntityWorker.Replicas parsedReplicas,
+                                      final long timestamp) {
+        final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
+        final List<LoadRouter.Node> nodes = loadRouter.selectNodeForKey(key, parsedReplicas.from);
+        final List<CompletableFuture<ResponseRepresentation>> responses = new ArrayList<>();
+        boolean seenMe = false;
+        for (final LoadRouter.Node node : nodes) {
+            if (node.isMe()) {
+                seenMe = true;
+                continue;
+            }
+            responses.add(EntityWorker.proxy(id, request, timestamp, node, client));
+        }
+        if (seenMe) {
+            responses.add(EntityWorker.processRequestLocally(request, id, timestamp, dao));
+        }
+        CompletableFutureHelper
+                .whenComplete(responses, parsedReplicas.ack)
+                .thenAccept(res -> {
+                    try {
+                        session.sendResponse(EntityWorker.makeResponse(request, parsedReplicas.ack, res));
+                    } catch (IOException e) {
+                        sendError(session, e.getMessage());
+                    }
+                })
+                .exceptionally(ex -> {
+                    try {
+                        session.sendResponse(new Response(Response.GATEWAY_TIMEOUT, Response.EMPTY));
+                    } catch (IOException e) {
+                        sendError(session, e.getMessage());
+                    }
+                    return null;
+                });
     }
 
     private void sendError(@NotNull final HttpSession session, @NotNull final String message) {

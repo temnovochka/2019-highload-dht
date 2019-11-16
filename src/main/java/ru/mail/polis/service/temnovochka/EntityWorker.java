@@ -1,5 +1,6 @@
 package ru.mail.polis.service.temnovochka;
 
+import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableSet;
 import one.nio.http.Request;
 import one.nio.http.Response;
@@ -97,23 +98,24 @@ public final class EntityWorker {
      * @throws IOException when something went wrong
      */
     public static Response responseProcessEntity(final DAO dao,
-                                                 final ByteBuffer id,
+                                                 final String id,
                                                  final Request request,
                                                  final long timestamp) throws IOException {
+        final ByteBuffer key = ByteBuffer.wrap(id.getBytes(Charsets.UTF_8));
         switch (request.getMethod()) {
             case Request.METHOD_GET:
                 try {
-                    final DAORecord resOfGet = dao.getRecord(id);
+                    final DAORecord resOfGet = dao.getRecord(key);
                     return Response.ok(resOfGet.toBytes());
                 } catch (NoSuchElementException e) {
                     return new Response(Response.NOT_FOUND, Response.EMPTY);
                 }
             case Request.METHOD_PUT:
                 final ByteBuffer value = ByteBuffer.wrap(request.getBody());
-                dao.upsertRecord(id, new DAORecord(value, timestamp, false));
+                dao.upsertRecord(key, new DAORecord(value, timestamp, false));
                 return new Response(Response.CREATED, Response.EMPTY);
             case Request.METHOD_DELETE:
-                dao.upsertRecord(id, new DAORecord(ByteBuffer.allocate(0), timestamp, true));
+                dao.upsertRecord(key, new DAORecord(ByteBuffer.allocate(0), timestamp, true));
                 return new Response(Response.ACCEPTED, Response.EMPTY);
             default:
                 return new Response(Response.METHOD_NOT_ALLOWED, Response.EMPTY);
@@ -190,7 +192,7 @@ public final class EntityWorker {
      */
     @NotNull
     public static CompletableFuture<ResponseRepresentation> processRequestLocally(@NotNull final Request request,
-                                                                                  final ByteBuffer key,
+                                                                                  final String key,
                                                                                   final long timestamp,
                                                                                   final DAO dao) {
         final CompletableFuture<ResponseRepresentation> response = new CompletableFuture<>();
