@@ -35,7 +35,7 @@ public final class CompletableFutureHelper {
                         }
                     })
                     .exceptionally(exception -> {
-                        if (maxNumOfExceptions.decrementAndGet() <= 0) {
+                        if (maxNumOfExceptions.decrementAndGet() < 0) {
                             result.completeExceptionally(new IOException("Futures completed with exceptions"));
                         }
                         return null;
