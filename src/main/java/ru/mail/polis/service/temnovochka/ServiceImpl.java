@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ForkJoinPool;
 
 public class ServiceImpl extends HttpServer implements Service {
     private static final Log log = LogFactory.getLog(Server.class);
@@ -53,7 +54,10 @@ public class ServiceImpl extends HttpServer implements Service {
         super(getConfig(port));
         this.dao = dao;
         this.loadRouter = loadRouter;
-        this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build();
+        this.client = HttpClient.newBuilder()
+                .executor(new ForkJoinPool())
+                .connectTimeout(Duration.ofSeconds(20))
+                .build();
     }
 
     /**
