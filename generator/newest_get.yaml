@@ -1,6 +1,6 @@
 phantom:
   address: 192.168.1.73:8080
-  ammofile: generated_files/unique_put.gz  
+  ammofile: generated_files/newest_get.gz  
   load_profile:
     load_type: rps
     schedule: line(1, 12000, 2m) const(7000, 3m)
@@ -10,7 +10,7 @@ telegraf:
   enabled: false
 overload:
   enabled: true
-  job_name: unique put
-  job_dsc: put unique entities
+  job_name: newest get
+  job_dsc: get newest entities
   token_file: token.txt
 
