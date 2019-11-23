@@ -1,0 +1,21 @@
+phantom:
+  address: 192.168.1.77:8080
+  ammofile: generated_files/unique_put.gz  
+  load_profile:
+    load_type: rps
+    schedule: const(1, 1m) #line(1, 8000, 2m) const(5000, 3m)
+  writelog: all
+autostop:
+  autostop:
+    - http(5xx,25%,10s)
+    - time(1s,10s)
+console:
+  enabled: true
+telegraf:
+  enabled: false
+overload:
+  enabled: false
+  job_name: unique put
+  job_dsc: put unique entities
+  token_file: token.txt
+
